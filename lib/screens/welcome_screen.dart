@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'menu_screen.dart'; // Importamos el menú para poder ir allá
+import 'menu_screen.dart'; 
+import 'auth/login_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -53,11 +54,9 @@ class WelcomeScreen extends StatelessWidget {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Usamos pushReplacement para que al dar "Atrás" en el menú,
-                    // no vuelva a esta pantalla de bienvenida, sino que salga de la app.
-                    Navigator.pushReplacement(
+                    Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (context) => const MenuScreen()),
+                      MaterialPageRoute(builder: (context) => const LoginScreen()), // Cambiado: Ahora va al Login
                     );
                   },
                   style: ElevatedButton.styleFrom(

@@ -25,11 +25,12 @@ class _DetailScreenState extends State<DetailScreen> {
           Stack(
             alignment: Alignment.bottomRight,
             children: [
-              Container(
-                height: 200,
+              SizedBox(
+                height: 250,
                 width: double.infinity,
-                color: widget.item.color,
-                child: Center(child: Icon(widget.item.icon, size: 100, color: Colors.white)),
+                child: widget.item.imageUrl != null
+                    ? Image.network(widget.item.imageUrl!, fit: BoxFit.cover)
+                    : Container(color: Colors.orange, child: const Icon(Icons.fastfood, size: 100)),
               ),
               const Padding(
                 padding: EdgeInsets.all(16.0),
