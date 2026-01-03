@@ -19,7 +19,7 @@ class _MenuScreenState extends State<MenuScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Menú Supabase"), backgroundColor: Colors.deepOrange),
+      appBar: AppBar(title: const Text("Menú "), backgroundColor: Colors.deepOrange),
       drawer: const SideMenu(),
       
       // Botón flotante para Agregar Productos (Solo visible si quieres probar el CRUD)

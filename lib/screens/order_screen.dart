@@ -1,24 +1,72 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrderScreen extends StatefulWidget {
-  const OrderScreen({super.key});
+  // Variables para recibir los datos del Detalle
+  final String productName;
+  final double totalPrice;
+  final String orderDetails; // Ej: "Tamaño: Mediano, Con Queso"
+
+  const OrderScreen({
+    super.key,
+    required this.productName,
+    required this.totalPrice,
+    required this.orderDetails,
+  });
 
   @override
   State<OrderScreen> createState() => _OrderScreenState();
 }
 
 class _OrderScreenState extends State<OrderScreen> {
-  // 1. Clave global para identificar el formulario y validarlo
   final _formKey = GlobalKey<FormState>();
-  
-  // Controlador para obtener el texto si lo necesitamos luego
   final _addressController = TextEditingController();
+  final _notesController = TextEditingController();
+  bool _isLoading = false;
 
-  @override
-  void dispose() {
-    // Limpiamos el controlador cuando se cierra la pantalla
-    _addressController.dispose();
-    super.dispose();
+  // Función para Guardar el Pedido en Supabase
+  Future<void> _submitOrder() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      
+      if (user == null) {
+        throw "Usuario no identificado";
+      }
+
+      // INSERTAR EN LA TABLA 'ORDERS'
+      await Supabase.instance.client.from('orders').insert({
+        'user_id': user.id, // ID del usuario logueado
+        'total_price': widget.totalPrice,
+        'address': _addressController.text,
+        'status': 'Pendiente',
+        'items': { // Guardamos los detalles como un objeto JSON
+          'product': widget.productName,
+          'details': widget.orderDetails,
+          'notes': _notesController.text
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("¡Pedido realizado con éxito! 🚀"), backgroundColor: Colors.green)
+        );
+        // Volver al menú principal eliminando el historial de navegación
+        Navigator.popUntil(context, (route) => route.isFirst);
+      }
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)
+        );
+      }
+    }
+    
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
@@ -27,98 +75,76 @@ class _OrderScreenState extends State<OrderScreen> {
       appBar: AppBar(title: const Text("Confirmar Pedido")),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        // 2. Envolvemos todo en un widget Form
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-              const Text("Resumen del Pedido", style: TextStyle(fontSize: 20)),
+              const Text("Resumen", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
               
-              Expanded(
-                child: ListView(
-                  children: const [
-                    ListTile(
-                      leading: Icon(Icons.check_circle, color: Colors.green),
-                      title: Text("1x Hamburguesa (Mediana)"),
-                      subtitle: Text("Combo: Sí, Extras: Queso"),
-                      trailing: Text("\$8.50"),
-                    ),
-                    ListTile(
-                      leading: Icon(Icons.local_shipping, color: Colors.grey),
-                      title: Text("Costo de envío"),
-                      trailing: Text("\$2.00"),
-                    ),
-                  ],
+              // Tarjeta de Resumen Dinámica
+              Card(
+                elevation: 4,
+                child: ListTile(
+                  leading: const Icon(Icons.receipt_long, color: Colors.deepOrange),
+                  title: Text(widget.productName),
+                  subtitle: Text(widget.orderDetails),
+                  trailing: Text("\$${widget.totalPrice.toStringAsFixed(2)}", 
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
               ),
 
-              const Divider(),
+              const SizedBox(height: 20),
               
-              // 3. Usamos TextFormField en lugar de TextField para validar
+              // Campo Dirección
               TextFormField(
                 controller: _addressController,
                 decoration: const InputDecoration(
-                  labelText: "Dirección de entrega *", // El * indica obligatorio
+                  labelText: "Dirección de entrega *",
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.map),
                 ),
-                // Lógica de validación
                 validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa una dirección';
-                  }
-                  if (value.length < 5) {
-                    return 'La dirección es muy corta';
-                  }
-                  return null; // Null significa que es válido
+                  if (value == null || value.isEmpty) return 'La dirección es obligatoria';
+                  return null;
                 },
               ),
               
               const SizedBox(height: 10),
               
-              // Este lo dejamos como TextField normal (opcional)
-              const TextField(
-                decoration: InputDecoration(
+              // Campo Notas
+              TextField(
+                controller: _notesController,
+                decoration: const InputDecoration(
                   labelText: "Notas para el repartidor (Opcional)",
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.note),
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const Spacer(),
 
+              // Botones de Acción
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("Cancelar"),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Cancelar"),
+                    ),
                   ),
-                  OutlinedButton(
-                    onPressed: () {
-                      // 4. Ejecutamos la validación al presionar
-                      if (_formKey.currentState!.validate()) {
-                        // Si es válido, mostramos el mensaje y salimos
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text("Enviando a: ${_addressController.text}"),
-                              backgroundColor: Colors.green,
-                            )
-                        );
-                        // Simulamos una espera y volvemos al inicio
-                        Future.delayed(const Duration(seconds: 2), () {
-                            Navigator.popUntil(context, (route) => route.isFirst);
-                        });
-                      } else {
-                        // Si falla, Flutter muestra el error en rojo automáticamente
-                        ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Revisa los errores en rojo"),
-                              backgroundColor: Colors.red,
-                            )
-                        );
-                      }
-                    },
-                    child: const Text("Confirmar y Pagar"),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepOrange, 
+                        foregroundColor: Colors.white
+                      ),
+                      onPressed: _isLoading ? null : _submitOrder,
+                      child: _isLoading 
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text("CONFIRMAR PEDIDO"),
+                    ),
                   ),
                 ],
               )

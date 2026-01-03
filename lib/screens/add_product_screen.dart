@@ -2,9 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/food_item.dart'; // Importante para recibir el objeto
 
 class AddProductScreen extends StatefulWidget {
-  const AddProductScreen({super.key});
+  final FoodItem? productToEdit; // Si es null = Crear, Si tiene datos = Editar
+
+  const AddProductScreen({super.key, this.productToEdit});
 
   @override
   State<AddProductScreen> createState() => _AddProductScreenState();
@@ -13,54 +16,76 @@ class AddProductScreen extends StatefulWidget {
 class _AddProductScreenState extends State<AddProductScreen> {
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
-  File? _imageFile; // Para guardar la foto seleccionada temporalmente
+  File? _imageFile; 
+  String? _currentImageUrl; // Para mostrar la imagen que ya existía
   bool _isLoading = false;
 
-  // 1. Función para seleccionar imagen de la galería
-  Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-    
-    if (image != null) {
-      setState(() {
-        _imageFile = File(image.path);
-      });
+  @override
+  void initState() {
+    super.initState();
+    // Si estamos editando, rellenamos los campos
+    if (widget.productToEdit != null) {
+      _nameController.text = widget.productToEdit!.name;
+      _priceController.text = widget.productToEdit!.price.toString();
+      _currentImageUrl = widget.productToEdit!.imageUrl;
     }
   }
 
-  // 2. Función para subir todo a Supabase
-  Future<void> _uploadProduct() async {
-    if (_nameController.text.isEmpty || _priceController.text.isEmpty || _imageFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Faltan datos o imagen')));
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() => _imageFile = File(image.path));
+    }
+  }
+
+  Future<void> _saveProduct() async {
+    if (_nameController.text.isEmpty || _priceController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Faltan datos')));
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-      
-      // A. Subir la imagen al Bucket 'food-images'
-      await Supabase.instance.client.storage
-          .from('food-images')
-          .upload(fileName, _imageFile!);
+      String? imageUrlToSave = _currentImageUrl;
 
-      // B. Obtener la URL pública de esa imagen
-      final String imageUrl = Supabase.instance.client.storage
-          .from('food-images')
-          .getPublicUrl(fileName);
+      // 1. Si el usuario eligió una NUEVA foto, la subimos
+      if (_imageFile != null) {
+        final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await Supabase.instance.client.storage
+            .from('food-images')
+            .upload(fileName, _imageFile!);
+        
+        imageUrlToSave = Supabase.instance.client.storage
+            .from('food-images')
+            .getPublicUrl(fileName);
+      }
 
-      // C. Guardar los datos en la tabla 'foods'
-      await Supabase.instance.client.from('foods').insert({
+      final data = {
         'name': _nameController.text,
         'price': double.parse(_priceController.text),
-        'image_url': imageUrl, // Guardamos el link
+        'image_url': imageUrlToSave,
         'category': 'General',
-      });
+      };
+
+      if (widget.productToEdit == null) {
+        // --- CREAR NUEVO ---
+        if (_imageFile == null) throw "La imagen es obligatoria para nuevos productos";
+        await Supabase.instance.client.from('foods').insert(data);
+      } else {
+        // --- ACTUALIZAR EXISTENTE ---
+        await Supabase.instance.client
+            .from('foods')
+            .update(data)
+            .eq('id', widget.productToEdit!.id!); // Buscamos por ID
+      }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Producto Agregado!'), backgroundColor: Colors.green));
-        Navigator.pop(context); // Volver al menú
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.productToEdit == null ? '¡Creado!' : '¡Actualizado!'), backgroundColor: Colors.green)
+        );
+        Navigator.pop(context); // Volver
       }
     } catch (e) {
       if (mounted) {
@@ -72,14 +97,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.productToEdit != null;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Agregar Producto")),
+      appBar: AppBar(title: Text(isEditing ? "Editar Producto" : "Nuevo Producto")),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // Área para tocar y subir foto
               GestureDetector(
                 onTap: _pickImage,
                 child: Container(
@@ -90,37 +116,37 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     border: Border.all(color: Colors.grey),
                     borderRadius: BorderRadius.circular(10),
                   ),
+                  // Lógica visual: Mostrar archivo nuevo O imagen existente O icono vacío
                   child: _imageFile != null
                       ? Image.file(_imageFile!, fit: BoxFit.cover)
-                      : const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.camera_alt, size: 50, color: Colors.grey),
-                            Text("Toca para subir imagen"),
-                          ],
-                        ),
+                      : (_currentImageUrl != null 
+                          ? Image.network(_currentImageUrl!, fit: BoxFit.cover)
+                          : const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [Icon(Icons.camera_alt, size: 50, color: Colors.grey), Text("Toca para subir")],
+                            )),
                 ),
               ),
               const SizedBox(height: 20),
-              
               TextField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: "Nombre del producto", border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: "Nombre", border: OutlineInputBorder()),
               ),
               const SizedBox(height: 15),
               TextField(
                 controller: _priceController,
-                decoration: const InputDecoration(labelText: "Precio (ej. 5.99)", border: OutlineInputBorder()),
+                decoration: const InputDecoration(labelText: "Precio", border: OutlineInputBorder()),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
               ),
               const SizedBox(height: 30),
-              
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _uploadProduct,
-                  child: _isLoading ? const CircularProgressIndicator() : const Text("GUARDAR PRODUCTO"),
+                  onPressed: _isLoading ? null : _saveProduct,
+                  child: _isLoading 
+                    ? const CircularProgressIndicator() 
+                    : Text(isEditing ? "ACTUALIZAR PRODUCTO" : "GUARDAR PRODUCTO"),
                 ),
               )
             ],
