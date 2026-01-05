@@ -67,7 +67,7 @@ class SideMenu extends StatelessWidget {
             title: const Text('Cerrar Sesión', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
             onTap: () async {
               // 1. Cerrar el menú visualmente
-              Navigator.pop(context);
+              
 
               // 2. Cerrar sesión en Supabase
               await Supabase.instance.client.auth.signOut();

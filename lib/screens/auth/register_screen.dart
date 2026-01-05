@@ -19,11 +19,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await Supabase.instance.client.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
+        emailRedirectTo: 'https://fastfoot-web.vercel.app/'
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cuenta creada. ¡Por favor inicia sesión!'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Cuenta creada. ¡Por favor revisa tu correo!'), backgroundColor: Colors.green),
         );
         Navigator.pop(context); // Volver al login
       }

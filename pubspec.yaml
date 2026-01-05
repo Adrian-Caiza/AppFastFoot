@@ -34,6 +34,8 @@ dependencies:
   image_picker: ^1.1.2      # Para seleccionar fotos de la galería
   url_launcher: ^6.3.0      # Para abrir links de reset password si es necesario
   flutter_dotenv: ^5.2.1   # Para manejar variables de entorno
+  http: ^1.2.0                # Para hacer peticiones HTTP
+
 
 
   # The following adds the Cupertino Icons font to your application.
